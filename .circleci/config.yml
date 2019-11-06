@@ -1,0 +1,48 @@
+version: 2
+.conan-environment: &conan-environment
+    PACKAGE_NAME: "tinygltf"
+
+.conan-steps: &conan-steps
+  steps:
+    - checkout
+    - run:
+        name: Verify tag
+        command: |
+          git describe --exact-match --abbrev=0
+    - run:
+        name: Setup channel and package version
+        command: |
+          echo "export CONAN_CHANNEL=$CIRCLE_BRANCH" >> $BASH_ENV
+          echo "export PACKAGE_VERSION=$(git describe --exact-match --abbrev=0 | sed -e 's/v//' | sed -e 's/-.*//')" >> $BASH_ENV
+    - run:
+        name: Create package
+        command: |
+          conan create . "$PACKAGE_NAME/$PACKAGE_VERSION@imerso/$CONAN_CHANNEL"\
+            --test-build-folder test_build_folder\
+            --profile $PROFILE
+    - run:
+        name: Upload package if release
+        command: |
+          echo "conan upload $PACKAGE_NAME/$PACKAGE_VERSION@imerso/$CONAN_CHANNEL"
+          if [[ "$CONAN_CHANNEL" == "master" ]];
+          then
+            conan upload "$PACKAGE_NAME/$PACKAGE_VERSION@imerso/$CONAN_CHANNEL"\
+              --all\
+              -r conan-imerso
+          fi
+
+jobs:
+  gcc-8:
+    docker:
+      - image: eu.gcr.io/imerso-3dscanner-backend/imerso-comp-builder:v0.4.2-2-gfd9d257-dev
+    environment:
+      PROFILE: "gcc8_ubuntu"
+      <<: *conan-environment
+    <<: *conan-steps
+
+workflows:
+  version: 2
+  build-test-deploy:
+    jobs:
+      - gcc-8
+
